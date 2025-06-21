@@ -1,6 +1,7 @@
 import scrapy
 from scrapy.http import Response
-from booksproject.items import BooksProjectItem  # імпортуємо Item-клас
+from books_project.items import BooksProjectItem
+
 
 class BooksSpider(scrapy.Spider):
     name = "books"
