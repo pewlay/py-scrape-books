@@ -1,6 +1,6 @@
 import scrapy
 from scrapy.http import Response
-
+from booksproject.items import BooksProjectItem  # імпортуємо Item-клас
 
 class BooksSpider(scrapy.Spider):
     name = "books"
@@ -19,6 +19,15 @@ class BooksSpider(scrapy.Spider):
         super().__init__(*args, **kwargs)
         self.book_links = {}
 
+    def parse(self, response: Response, **kwargs) -> None:
+        self._get_books_links(response)
+
+        next_page = response.css(".next a::attr(href)").get()
+        if next_page:
+            yield response.follow(next_page, callback=self.parse)
+        else:
+            yield from self._parse_books()
+
     def _get_books_links(self, response: Response) -> None:
         for book in response.css(".product_pod"):
             title = book.css("h3 a::attr(title)").get()
@@ -26,7 +35,7 @@ class BooksSpider(scrapy.Spider):
             if title and link:
                 self.book_links[title] = response.urljoin(link)
 
-    def _parse_books(self) -> None:
+    def _parse_books(self):
         for title, link in self.book_links.items():
             yield scrapy.Request(
                 url=link,
@@ -34,36 +43,23 @@ class BooksSpider(scrapy.Spider):
                 meta={"title": title}
             )
 
-    def _parse_book(self, response: Response) -> None:
+    def _parse_book(self, response: Response):
         rating_text = response.css("p.star-rating::attr(class)").get()
         rating = next(
             (
                 self.NUMBERS[word]
                 for word in self.NUMBERS
-                if word in rating_text),
+                if word in rating_text
+            ),
             None
         )
-        yield {
-            "title": response.css(".product_main h1::text").get(),
-            "price": response.css(".price_color::text").get(),
-            "amount_in_stock": response.css(".availability::text").re_first(
-                r"\d+"
-            ),
-            "rating": rating,
-            "category": response.css(
-                ".breadcrumb li:nth-child(3) a::text"
-            ).get(),
-            "description": response.css(
-                "#product_description ~ p::text"
-            ).get(),
-            "upc": response.css("table tr:nth-child(1) td::text").get(),
-        }
 
-        def parse(self, response: Response, **kwargs) -> None:
-            self._get_books_links(response)
-
-            next_page = response.css(".next a::attr(href)").get()
-            if next_page:
-                yield response.follow(next_page, callback=self.parse)
-            else:
-                yield from self._parse_books()
+        yield BooksProjectItem(
+            title=response.css(".product_main h1::text").get(),
+            price=response.css(".price_color::text").get(),
+            amount_in_stock=response.css(".availability::text").re_first(r"\d+"),
+            rating=rating,
+            category=response.css(".breadcrumb li:nth-child(3) a::text").get(),
+            description=response.css("#product_description ~ p::text").get(),
+            upc=response.css("table tr:nth-child(1) td::text").get(),
+        )
